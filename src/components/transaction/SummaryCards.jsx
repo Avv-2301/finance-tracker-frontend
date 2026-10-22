@@ -1,8 +1,7 @@
-import { formatRupees, getSummaryStats, getTransactionsForPeriod } from "../../services/helper";
+import { formatRupees } from "../../helper.js";
 
-export default function SummaryCards({ transactions, month, dateRange }) {
-  const periodTransactions = getTransactionsForPeriod(transactions, month, dateRange);
-  const { totalSpend, expenseCount, topMethod, transactionCount } = getSummaryStats(periodTransactions);
+export default function SummaryCards({ summary, month, dateRange }) {
+  const { totalSpend, expenseCount, topMethod, transactionCount } = summary;
 
   return (
     <section className="summary-grid" aria-label="Transaction summary">

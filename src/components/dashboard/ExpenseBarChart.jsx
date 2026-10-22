@@ -1,7 +1,6 @@
-import { formatRupees } from "../../services/helper";
+import { formatRupees } from "../../helper.js";
 
 export default function ExpenseBarChart({ months }) {
-  const maxSpend = Math.max(...months.map((item) => item.spend), 0);
 
   return (
     <article className="dashboard-chart-card">
@@ -12,14 +11,22 @@ export default function ExpenseBarChart({ months }) {
         </div>
         <span className="chart-period">LAST 6 MONTHS</span>
       </div>
-      <div className="bar-chart" role="img" aria-label="Bar chart of expenses over the last six months">
+      <div
+        className="bar-chart"
+        role="img"
+        aria-label="Bar chart of expenses over the last six months"
+      >
         {months.map((item) => {
-          const barHeight = maxSpend ? Math.max((item.spend / maxSpend) * 100, item.spend ? 5 : 0) : 0;
           return (
             <div className="bar-chart-column" key={item.month}>
-              <div className="bar-chart-value">{item.spend ? formatRupees(item.spend) : "—"}</div>
+              <div className="bar-chart-value">
+                {item.spend ? formatRupees(item.spend) : "—"}
+              </div>
               <div className="bar-chart-track">
-                <div className="bar-chart-bar" style={{ height: `${barHeight}%` }} />
+                <div
+                  className="bar-chart-bar"
+                  style={{ height: `${item.heightPercent}%` }}
+                />
               </div>
               <span>{item.label}</span>
             </div>

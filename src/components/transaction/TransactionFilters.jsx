@@ -1,6 +1,5 @@
 import { methods } from "../../data/paymentMethods";
 import { expenseCategories } from "../../data/categories";
-import { getTransactionsForPeriod } from "../../services/helper";
 
 export default function TransactionFilters({
   search,
@@ -9,7 +8,7 @@ export default function TransactionFilters({
   setMonth,
   monthOptions,
   dateRange,
-  transactions,
+  methodCounts,
   onDateRangeChange,
   method,
   setMethod,
@@ -18,7 +17,6 @@ export default function TransactionFilters({
   sort,
   setSort,
 }) {
-  const periodTransactions = getTransactionsForPeriod(transactions, month, dateRange);
   return (
     <section className="filters-panel">
       <div className="filter-top">
@@ -27,7 +25,7 @@ export default function TransactionFilters({
           <input
             value={search}
             onChange={(e) => setSearch(e.target.value)}
-            placeholder="Search merchants, notes, tags (#uber, #splits, #coffee)..."
+            placeholder="Search merchants, categories, or notes..."
           />
           {search && (
             <button onClick={() => setSearch("")} aria-label="Clear search">
@@ -41,11 +39,9 @@ export default function TransactionFilters({
           aria-label="Filter by category"
         >
           <option value="all">Category: All Categories</option>
-          {[...expenseCategories, "Income"].map(
-            (c) => (
-              <option key={c}>{c}</option>
-            )
-          )}
+          {expenseCategories.map((c) => (
+            <option key={c}>{c}</option>
+          ))}
         </select>
         <select
           value={sort}
@@ -114,9 +110,7 @@ export default function TransactionFilters({
             >
               <span>{item.icon}</span>
               {item.label}
-              <small>{item.id === "all"
-                ? periodTransactions.length
-                : periodTransactions.filter((transaction) => transaction.method === item.id).length}</small>
+              <small>{methodCounts[item.id] ?? 0}</small>
             </button>
           ))}
         </div>

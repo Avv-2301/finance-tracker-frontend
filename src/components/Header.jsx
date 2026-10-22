@@ -1,3 +1,4 @@
+import { useEffect, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 
 const navItems = [
@@ -5,7 +6,31 @@ const navItems = [
   { label: "All Transactions", to: "/transaction", page: "transaction" },
 ];
 
-export default function Header({ onAdd, theme, onToggleTheme, activePage, userEmail, onLogout }) {
+export default function Header({ onAdd, theme, onToggleTheme, activePage, user, isAuthInitializing, onLogout }) {
+  const [isProfileMenuOpen, setIsProfileMenuOpen] = useState(false);
+  const profileMenuRef = useRef(null);
+
+  useEffect(() => {
+    if (!isProfileMenuOpen) return undefined;
+
+    function closeOnOutsideClick(event) {
+      if (!profileMenuRef.current?.contains(event.target)) {
+        setIsProfileMenuOpen(false);
+      }
+    }
+
+    function closeOnEscape(event) {
+      if (event.key === "Escape") setIsProfileMenuOpen(false);
+    }
+
+    document.addEventListener("pointerdown", closeOnOutsideClick);
+    document.addEventListener("keydown", closeOnEscape);
+    return () => {
+      document.removeEventListener("pointerdown", closeOnOutsideClick);
+      document.removeEventListener("keydown", closeOnEscape);
+    };
+  }, [isProfileMenuOpen]);
+
   return (
     <header className="topbar">
       <Link className="brand" to="/dashboard">
@@ -40,13 +65,40 @@ export default function Header({ onAdd, theme, onToggleTheme, activePage, userEm
         >
           {theme === "dark" ? "☀" : "☾"}
         </button>
-        {userEmail ? (
-          <div className="account-section">
-            <div className="avatar" title={userEmail}>
-              {userEmail.slice(0, 2).toUpperCase()}
+        {isAuthInitializing ? null : user ? (
+          <div className="account-section" aria-label="Profile section">
+            <div className="profile-menu-anchor" ref={profileMenuRef}>
+              <button
+                className="avatar profile-trigger"
+                type="button"
+                title="Open profile menu"
+                aria-label="Open profile menu"
+                aria-expanded={isProfileMenuOpen}
+                aria-controls="profile-menu"
+                onClick={() => setIsProfileMenuOpen((isOpen) => !isOpen)}
+              >
+                <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+                  <circle cx="12" cy="8" r="3.5" />
+                  <path d="M5.5 20c.4-3.7 2.7-5.8 6.5-5.8s6.1 2.1 6.5 5.8" />
+                </svg>
+              </button>
+              {isProfileMenuOpen && (
+                <div className="profile-menu" id="profile-menu">
+                  <span className="profile-menu-label">Signed in as</span>
+                  <span className="profile-menu-email">{user.email}</span>
+                  <button
+                    className="profile-menu-logout"
+                    type="button"
+                    onClick={() => {
+                      setIsProfileMenuOpen(false);
+                      onLogout();
+                    }}
+                  >
+                    Log out
+                  </button>
+                </div>
+              )}
             </div>
-            <span className="account-email">{userEmail}</span>
-            <button className="account-logout" type="button" onClick={onLogout}>Log out</button>
             <button className="button primary" onClick={onAdd}>＋ Add Finance</button>
           </div>
         ) : (

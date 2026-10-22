@@ -1,21 +1,31 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import SummaryCards from "../components/transaction/SummaryCards";
 import TransactionFilters from "../components/transaction/TransactionFilters";
 import TransactionList from "../components/transaction/TransactionList";
 import Inspector from "../components/transaction/Inspector";
 import AddTransactionModal from "../components/transaction/AddTransactionModal";
+import DeleteTransactionModal from "../components/transaction/DeleteTransactionModal";
+import { expenseApi } from "../api/expenses.js";
 import {
-  createTransaction,
-  filterTransactions,
+  formatExpenseRecord,
   formatMonth,
   getMonthOptions,
-  loadTransactions,
-} from "../services/helper";
+} from "../helper.js";
 
 export default function Transaction() {
   const monthOptions = useMemo(() => getMonthOptions(), []);
-  const [rows, setRows] = useState(() => loadTransactions());
+  const [rows, setRows] = useState([]);
+  const [methodCounts, setMethodCounts] = useState({});
+  const [summaryStats, setSummaryStats] = useState({
+    totalSpend: 0,
+    expenseCount: 0,
+    topMethod: undefined,
+    transactionCount: 0,
+  });
+  const [refreshVersion, setRefreshVersion] = useState(0);
   const [selectedId, setSelectedId] = useState(null);
+  const [selectedTransaction, setSelectedTransaction] = useState(null);
+  const selectionRequest = useRef(0);
   const [search, setSearch] = useState("");
   const [month, setMonth] = useState(() => formatMonth(new Date()));
   const [dateRange, setDateRange] = useState({ start: "", end: "" });
@@ -23,11 +33,43 @@ export default function Transaction() {
   const [category, setCategory] = useState("all");
   const [sort, setSort] = useState("newest");
   const [showAdd, setShowAdd] = useState(false);
-  const [inspectorOpen, setInspectorOpen] = useState(true);
+  const [transactionToDelete, setTransactionToDelete] = useState(null);
+  const [isDeleting, setIsDeleting] = useState(false);
+  const [deleteError, setDeleteError] = useState("");
 
   useEffect(() => {
-    localStorage.setItem("kashflow-transactions", JSON.stringify(rows));
-  }, [rows]);
+    let active = true;
+    const timeout = window.setTimeout(() => {
+      const filters = {
+        search,
+        category: category === "all" ? "" : category,
+        method: method === "all" ? "" : method,
+        sort,
+        month: dateRange.start || dateRange.end ? "all" : month,
+        startDate: dateRange.start,
+        endDate: dateRange.end,
+      };
+      expenseApi.getAll(filters)
+        .then(({ expenses, methodCounts: counts, summaryStats: summary }) => {
+          if (!active) return;
+          setRows(expenses.map(formatExpenseRecord));
+          setMethodCounts(counts ?? {});
+          setSummaryStats(summary ?? {
+            totalSpend: 0,
+            expenseCount: 0,
+            topMethod: undefined,
+            transactionCount: 0,
+          });
+        })
+        .catch((error) => {
+          if (active) console.error("Could not load expenses:", error);
+        });
+    }, search ? 250 : 0);
+    return () => {
+      active = false;
+      window.clearTimeout(timeout);
+    };
+  }, [search, category, method, sort, month, dateRange.start, dateRange.end, refreshVersion]);
 
   useEffect(() => {
     const openModal = () => setShowAdd(true);
@@ -35,31 +77,92 @@ export default function Transaction() {
     return () => window.removeEventListener("kashflow:open-expense-modal", openModal);
   }, []);
 
+  function clearSelection() {
+    selectionRequest.current += 1;
+    setSelectedId(null);
+    setSelectedTransaction(null);
+  }
+
+  function updateSearch(value) {
+    clearSelection();
+    setSearch(value);
+  }
+
+  function updateMethod(value) {
+    clearSelection();
+    setMethod(value);
+  }
+
+  function updateCategory(value) {
+    clearSelection();
+    setCategory(value);
+  }
+
   function selectMonth(value) {
+    clearSelection();
     setMonth(value);
     setDateRange({ start: "", end: "" });
   }
 
   function updateDateRange(key, value) {
+    clearSelection();
     setDateRange((current) => ({ ...current, [key]: value }));
     if (value) setMonth("all");
   }
 
-  const filteredRows = useMemo(
-    () => filterTransactions({ transactions: rows, month, dateRange, search, method, category, sort }),
-    [rows, search, month, dateRange, method, category, sort]
-  );
-
-  const selected = rows.find((txn) => txn.id === selectedId) || rows[0];
-
-  function addTransaction(entry) {
-    const next = createTransaction(entry);
+  async function addTransaction(entry) {
+    const { expense } = await expenseApi.add(entry);
+    const next = formatExpenseRecord(expense);
     setRows((current) => [next, ...current]);
-    setSelectedId(next.id);
     selectMonth(monthOptions.includes(next.month) ? next.month : "all");
     setMethod("all");
     setCategory("all");
     setSearch("");
+    setSelectedId(next.id);
+    setSelectedTransaction(next);
+    selectionRequest.current += 1;
+    setRefreshVersion((version) => version + 1);
+  }
+
+  async function selectTransaction(transactionId) {
+    const requestId = ++selectionRequest.current;
+    setSelectedId(transactionId);
+    setSelectedTransaction(null);
+
+    try {
+      const { expense } = await expenseApi.getById(transactionId);
+      if (selectionRequest.current === requestId) {
+        setSelectedTransaction(formatExpenseRecord(expense));
+      }
+    } catch (error) {
+      if (selectionRequest.current === requestId) {
+        setSelectedId(null);
+        console.error("Could not load transaction details:", error);
+      }
+    }
+  }
+
+  function closeInspector() {
+    selectionRequest.current += 1;
+    setSelectedId(null);
+    setSelectedTransaction(null);
+  }
+
+  async function deleteTransaction() {
+    if (!transactionToDelete || isDeleting) return;
+    setIsDeleting(true);
+    setDeleteError("");
+    try {
+      await expenseApi.delete(transactionToDelete.id);
+      setRows((current) => current.filter((row) => row.id !== transactionToDelete.id));
+      if (selectedId === transactionToDelete.id) closeInspector();
+      setRefreshVersion((version) => version + 1);
+      setTransactionToDelete(null);
+    } catch (error) {
+      setDeleteError(error.message || "Could not delete the transaction.");
+    } finally {
+      setIsDeleting(false);
+    }
   }
 
   return (
@@ -83,40 +186,41 @@ export default function Transaction() {
             </button>
           </div>
         </section>
-        <SummaryCards transactions={rows} month={month} dateRange={dateRange} />
+        <SummaryCards summary={summaryStats} month={month} dateRange={dateRange} />
         <TransactionFilters
           search={search}
-          setSearch={setSearch}
+          setSearch={updateSearch}
           month={month}
           setMonth={selectMonth}
           monthOptions={monthOptions}
           dateRange={dateRange}
-          transactions={rows}
+          methodCounts={methodCounts}
           onDateRangeChange={updateDateRange}
           method={method}
-          setMethod={setMethod}
+          setMethod={updateMethod}
           category={category}
-          setCategory={setCategory}
+          setCategory={updateCategory}
           sort={sort}
           setSort={setSort}
         />
-        <div className={`content-grid ${inspectorOpen ? "" : "inspector-hidden"}`}>
+        <div className={`content-grid ${selectedTransaction ? "" : "inspector-hidden"}`}>
           <TransactionList
-            rows={filteredRows}
+            rows={rows}
             totalTransactions={rows.length}
             selectedId={selectedId}
+            onDelete={(transaction) => {
+              setDeleteError("");
+              setTransactionToDelete(transaction);
+            }}
             month={month}
             dateRange={dateRange}
-            onSelect={(id) => {
-              setSelectedId(id);
-              setInspectorOpen(true);
-            }}
+            onSelect={selectTransaction}
           />
-          {inspectorOpen && selected && (
+          {selectedTransaction && (
             <Inspector
-              key={selected.id}
-              transaction={selected}
-              onClose={() => setInspectorOpen(false)}
+              key={selectedTransaction.id}
+              transaction={selectedTransaction}
+              onClose={closeInspector}
             />
           )}
         </div>
@@ -125,6 +229,15 @@ export default function Transaction() {
         <AddTransactionModal
           onClose={() => setShowAdd(false)}
           onAdd={addTransaction}
+        />
+      )}
+      {transactionToDelete && (
+        <DeleteTransactionModal
+          transaction={transactionToDelete}
+          isDeleting={isDeleting}
+          error={deleteError}
+          onCancel={() => setTransactionToDelete(null)}
+          onConfirm={deleteTransaction}
         />
       )}
     </>

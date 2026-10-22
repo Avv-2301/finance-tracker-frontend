@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { expenseCategories } from "../../data/categories";
-import { getLocalDateInputValue } from "../../services/helper";
+import { getLocalDateInputValue } from "../../helper.js";
 
 const paymentMethods = ["UPI", "Debit Card", "Credit Card", "Cash"];
 
@@ -12,18 +12,22 @@ export default function AddTransactionModal({ onClose, onAdd }) {
   const [method, setMethod] = useState("UPI");
   const [note, setNote] = useState("");
 
-  function submit(event) {
+  async function submit(event) {
     event.preventDefault();
     if (!merchant.trim() || !date || !amount || Number(amount) <= 0) return;
-    onAdd({
-      merchant: merchant.trim(),
-      category,
-      date,
-      amount: -Math.abs(Number(amount)),
-      method,
-      note: note.trim(),
-    });
-    onClose();
+    try {
+      await onAdd({
+        merchant: merchant.trim(),
+        category,
+        date,
+        amount: Number(amount),
+        method,
+        note: note.trim(),
+      });
+      onClose();
+    } catch (error) {
+      window.alert(error.message || "Could not add the expense.");
+    }
   }
 
   return (
@@ -48,7 +52,7 @@ export default function AddTransactionModal({ onClose, onAdd }) {
             required
             value={merchant}
             onChange={(event) => setMerchant(event.target.value)}
-            placeholder="e.g. Blue Tokai Coffee"
+            placeholder="e.g. Merchant name"
           />
         </label>
         <label>

@@ -2,10 +2,12 @@ import { useEffect, useState } from "react";
 import { Navigate, Route, Routes, useLocation } from "react-router-dom";
 import Footer from "./components/Footer";
 import Header from "./components/Header";
+import ProtectedRoute from "./components/auth/ProtectedRoute";
 import Dashboard from "./pages/Dashboard";
 import Login from "./pages/Login";
 import SignUp from "./pages/SignUp";
 import Transaction from "./pages/Transaction";
+import { useAuthStore } from "./store/authStore";
 import "./App.css";
 
 export default function App() {
@@ -13,7 +15,45 @@ export default function App() {
   const path = location.pathname;
   const isAuthPage = path === "/login" || path === "/signup";
   const [theme, setTheme] = useState(() => localStorage.getItem("kashflow-theme") || "dark");
-  const [userEmail, setUserEmail] = useState(() => localStorage.getItem("kashflow-user-email") || "");
+  const user = useAuthStore((state) => state.user);
+  const isAuthInitializing = useAuthStore((state) => state.isInitializing);
+  const initializeAuth = useAuthStore((state) => state.initialize);
+  const checkSession = useAuthStore((state) => state.checkSession);
+  const sessionExpiresAt = useAuthStore((state) => state.sessionExpiresAt);
+  const logoutFromStore = useAuthStore((state) => state.logout);
+
+  useEffect(() => {
+    initializeAuth();
+  }, [initializeAuth]);
+
+  useEffect(() => {
+    const clearExpiredSession = () => useAuthStore.getState().clearSession();
+    window.addEventListener("kashflow:session-expired", clearExpiredSession);
+    return () => window.removeEventListener("kashflow:session-expired", clearExpiredSession);
+  }, []);
+
+  useEffect(() => {
+    if (!user || !sessionExpiresAt) return undefined;
+
+    const checkForExpiredSession = () => {
+      if (Date.now() >= sessionExpiresAt) {
+        void checkSession();
+      }
+    };
+    const timeout = window.setTimeout(
+      checkForExpiredSession,
+      Math.max(0, sessionExpiresAt - Date.now()),
+    );
+
+    document.addEventListener("visibilitychange", checkForExpiredSession);
+    window.addEventListener("focus", checkForExpiredSession);
+
+    return () => {
+      window.clearTimeout(timeout);
+      document.removeEventListener("visibilitychange", checkForExpiredSession);
+      window.removeEventListener("focus", checkForExpiredSession);
+    };
+  }, [user, sessionExpiresAt, checkSession]);
 
   useEffect(() => {
     document.documentElement.dataset.theme = theme;
@@ -23,11 +63,6 @@ export default function App() {
     const nextTheme = theme === "dark" ? "light" : "dark";
     localStorage.setItem("kashflow-theme", nextTheme);
     setTheme(nextTheme);
-  }
-
-  function logout() {
-    localStorage.removeItem("kashflow-user-email");
-    setUserEmail("");
   }
 
   function openExpenseModal() {
@@ -50,13 +85,14 @@ export default function App() {
         onAdd={openExpenseModal}
         theme={theme}
         onToggleTheme={toggleTheme}
-        userEmail={userEmail}
-        onLogout={logout}
+        user={user}
+        isAuthInitializing={isAuthInitializing}
+        onLogout={logoutFromStore}
       />
       <Routes>
         <Route path="/" element={<Navigate to="/dashboard" replace />} />
-        <Route path="/dashboard" element={<Dashboard />} />
-        <Route path="/transaction" element={<Transaction />} />
+        <Route path="/dashboard" element={<ProtectedRoute><Dashboard /></ProtectedRoute>} />
+        <Route path="/transaction" element={<ProtectedRoute><Transaction /></ProtectedRoute>} />
         <Route path="*" element={<Navigate to="/dashboard" replace />} />
       </Routes>
       <Footer />

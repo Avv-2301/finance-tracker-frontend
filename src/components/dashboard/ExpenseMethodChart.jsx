@@ -1,16 +1,17 @@
-import { formatRupees } from "../../services/helper";
+import { formatRupees } from "../../helper.js";
+import { methodChartColors } from "./chartColors.js";
 
-const chartColors = ["#ccff00", "#4cd7f6", "#d0bcff", "#ff9f6e", "#ff6b8a"];
-
-export default function ExpenseMethodChart({ methods, month, monthOptions, onMonthChange }) {
-  const totalSpend = methods.reduce((total, item) => total + item.amount, 0);
-  let gradientOffset = 0;
+export default function ExpenseMethodChart({
+  methods,
+  totalSpend,
+  month,
+  monthOptions,
+  onMonthChange,
+}) {
   const gradient = methods.length
-    ? methods.map((item, index) => {
-      const start = gradientOffset;
-      gradientOffset += (item.amount / totalSpend) * 100;
-      return `${chartColors[index % chartColors.length]} ${start}% ${gradientOffset}%`;
-    }).join(", ")
+    ? methods
+        .map((item) => `${methodChartColors[item.method] ?? "#aeb2a2"} ${item.startPercent}% ${item.endPercent}%`)
+        .join(", ")
     : "#343943 0% 100%";
   return (
     <article className="dashboard-chart-card method-chart-card">
@@ -21,8 +22,16 @@ export default function ExpenseMethodChart({ methods, month, monthOptions, onMon
         </div>
         <label className="chart-month-select">
           <span className="sr-only">Choose chart month</span>
-          <select value={month} onChange={(event) => onMonthChange(event.target.value)} aria-label="Choose pie chart month">
-            {monthOptions.map((option) => <option key={option} value={option}>{option}</option>)}
+          <select
+            value={month}
+            onChange={(event) => onMonthChange(event.target.value)}
+            aria-label="Choose pie chart month"
+          >
+            {monthOptions.map((option) => (
+              <option key={option} value={option}>
+                {option}
+              </option>
+            ))}
           </select>
         </label>
       </div>
@@ -31,7 +40,13 @@ export default function ExpenseMethodChart({ methods, month, monthOptions, onMon
           className={`method-donut${methods.length ? "" : " is-empty"}`}
           style={{ background: `conic-gradient(${gradient})` }}
           role="img"
-          aria-label={methods.length ? `Current month expenses by payment method, total ${formatRupees(totalSpend)}` : "No current month expenses"}
+          aria-label={
+            methods.length
+              ? `Expenses by payment method for ${month}, total ${formatRupees(
+                  totalSpend
+                )}`
+              : `No expenses recorded for ${month}`
+          }
         >
           <div className="method-donut-center">
             <span>TOTAL SPENT</span>
@@ -39,13 +54,22 @@ export default function ExpenseMethodChart({ methods, month, monthOptions, onMon
           </div>
         </div>
         <div className="method-legend">
-          {methods.length ? methods.map((item, index) => (
-            <div className="method-legend-item" key={item.method}>
-              <span className="method-legend-dot" style={{ background: chartColors[index % chartColors.length] }} />
-              <span className="method-legend-name">{item.method}</span>
-              <strong>{formatRupees(item.amount)}</strong>
-            </div>
-          )) : <p className="chart-empty">No expenses recorded this month yet.</p>}
+          {methods.length ? (
+            methods.map((item) => (
+              <div className="method-legend-item" key={item.method}>
+                <span
+                  className="method-legend-dot"
+                  style={{
+                    background: methodChartColors[item.method] ?? "#aeb2a2",
+                  }}
+                />
+                <span className="method-legend-name">{item.method}</span>
+                <strong>{formatRupees(item.amount)}</strong>
+              </div>
+            ))
+          ) : (
+            <p className="chart-empty">No expenses recorded this month yet.</p>
+          )}
         </div>
       </div>
     </article>

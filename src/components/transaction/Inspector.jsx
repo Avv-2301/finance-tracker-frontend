@@ -1,4 +1,4 @@
-import { formatTransactionAmount } from "../../services/helper";
+import { formatTransactionAmount } from "../../helper.js";
 
 export default function Inspector({ transaction, onClose }) {
   return (
@@ -22,7 +22,6 @@ export default function Inspector({ transaction, onClose }) {
         </div>
         <div className="selected-amount">
           <b>{formatTransactionAmount(transaction.amount)}</b>
-          <small>{transaction.status}</small>
         </div>
       </div>
 
@@ -39,17 +38,12 @@ export default function Inspector({ transaction, onClose }) {
           <span className="form-label">TRANSACTION ID</span>
           <strong>{transaction.id}</strong>
         </div>
-        <div className="detail-item">
-          <span className="form-label">STATUS</span>
-          <strong>{transaction.status}</strong>
-        </div>
       </div>
 
       <section className="detail-section">
         <h3 className="form-label">TRANSACTION NOTE</h3>
         <p className="detail-note">{transaction.note || "No note added."}</p>
       </section>
-
     </aside>
   );
 }

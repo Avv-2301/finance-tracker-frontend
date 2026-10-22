@@ -1,22 +1,33 @@
-import { formatTransactionAmount } from "../../services/helper";
+import { formatTransactionAmount } from "../../helper.js";
 
-export default function TransactionList({ rows, totalTransactions, selectedId, onSelect, month, dateRange }) {
+export default function TransactionList({ rows, totalTransactions, selectedId, onSelect, onDelete, month, dateRange }) {
   return (
     <section className="list-wrap">
       <div className="list-head">
-        <span>TRANSACTION / ENTITY</span>
-        <span>PAYMENT RAIL</span>
-        <span>CONTEXTUAL MEMO & TAGS</span>
-        <span>MAGNITUDE</span>
+        <span>TRANSACTION</span>
+        <span>PAYMENT METHOD</span>
+        <span>TRANSACTION NOTE</span>
+        <span>AMOUNT</span>
+        <span>ACTION</span>
       </div>
       <div className="transaction-list">
         {rows.map((txn) => (
-          <button
+          <div
             key={txn.id}
             className={`transaction-row ${
               selectedId === txn.id ? "is-selected" : ""
             }`}
             onClick={() => onSelect(txn.id)}
+            onKeyDown={(event) => {
+              if (event.target !== event.currentTarget) return;
+              if (event.key === "Enter" || event.key === " ") {
+                event.preventDefault();
+                onSelect(txn.id);
+              }
+            }}
+            role="group"
+            tabIndex={0}
+            aria-label={`${txn.merchant} transaction`}
           >
             <span className="entity">
               <i className={`merchant-icon ${txn.tint}`}>{txn.icon}</i>
@@ -25,7 +36,7 @@ export default function TransactionList({ rows, totalTransactions, selectedId, o
                 <small>
                   {txn.category}
                   <b>·</b>
-                  {txn.date}
+                  {txn.dateOnly || txn.date}
                 </small>
               </span>
             </span>
@@ -34,24 +45,27 @@ export default function TransactionList({ rows, totalTransactions, selectedId, o
             </span>
             <span className="memo">
               <span className="memo-line">
-                ≡ <i>“{txn.note.split("#")[0].trim()}”</i>
-              </span>
-              <span className="tags">
-                {txn.tags.map((tag) => (
-                  <small key={tag}>{tag}</small>
-                ))}
-                {txn.receipt && <em>▣ Receipt Attached</em>}
+                <i>{txn.note?.trim() || "No note"}</i>
               </span>
             </span>
             <span className="amount">
-              <strong className={txn.amount > 0 ? "income" : ""}>
-                {formatTransactionAmount(txn.amount)}
-              </strong>
-              <small className={txn.status === "Pending" ? "pending" : ""}>
-                {txn.status}
-              </small>
+              <strong>{formatTransactionAmount(txn.amount)}</strong>
             </span>
-          </button>
+            <button
+              className="transaction-delete"
+              type="button"
+              aria-label={`Delete ${txn.merchant} transaction`}
+              title="Delete transaction"
+              onClick={(event) => {
+                event.stopPropagation();
+                onDelete(txn);
+              }}
+            >
+              <svg viewBox="0 0 24 24" aria-hidden="true">
+                <path d="M4 7h16M10 11v6m4-6v6M6 7l1 14h10l1-14M9 7V4h6v3" />
+              </svg>
+            </button>
+          </div>
         ))}
       </div>
       {rows.length === 0 ? (
